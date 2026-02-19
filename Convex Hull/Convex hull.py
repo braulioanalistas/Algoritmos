@@ -1,47 +1,23 @@
-"""
-
-Qué hace este programa:
-- Lee puntos (x,y) desde un CSV
-- Grafica los puntos
-- Calcula el Convex Hull (envolvente convexa)
-- Dibuja el polígono resultante
-
-Que hacer:
-- Completar las funciones marcadas con TODO
-- Probar con diferentes conjuntos de puntos
-
-Requisitos:
-- Python 3.x
-- matplotlib
-
-Instalación (si hace falta):
-pip install matplotlib
-"""
-
 import csv
-from typing import List, Tuple
+import tkinter as tk
+from tkinter import filedialog, messagebox
 import matplotlib.pyplot as plt
 
-Point = Tuple[float, float]
-
-
-def leer_puntos_csv(ruta_csv: str) -> List[Point]:
-    """Lee un CSV con encabezados x,y y regresa una lista de tuplas (x,y)."""
-    puntos: List[Point] = []
-    with open(ruta_csv, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            x = float(row["x"])
-            y = float(row["y"])
-            puntos.append((x, y))
+#Función para cargar el archivo CSV
+def leer_puntos_csv(ruta_csv):
+    puntos = []
+    try:
+        with open(ruta_csv, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                x = float(row["x"])
+                y = float(row["y"])
+                puntos.append((x, y))
+    except Exception as e:
+        print("Error al leer:", e)
     return puntos
 
-
-def punto_mas_izquierdo(puntos: List[Point]) -> int:
-    """
-    Regresa el índice del punto más a la izquierda.
-    En empate de x, escoger el de menor y (para hacerlo determinista).
-    """
+def punto_mas_izquierdo(puntos):
     idx = 0
     for i in range(1, len(puntos)):
         if puntos[i][0] < puntos[idx][0] or (puntos[i][0] == puntos[idx][0] and puntos[i][1] < puntos[idx][1]):
@@ -49,108 +25,87 @@ def punto_mas_izquierdo(puntos: List[Point]) -> int:
     return idx
 
 
-def orientacion(a: Point, b: Point, c: Point) -> float:
-    """
-    TODO:
-    Regresa el valor del producto cruz (cross product).
+def orientacion(a, b, c):
+    # Producto cruz para determinar el giro
+    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
 
-    Pista :
-    cross = (b.x - a.x)*(c.y - a.y) - (b.y - a.y)*(c.x - a.x)
-
-    Interpretación:
-    - cross > 0  : giro antihorario (CCW)
-    - cross < 0  : giro horario (CW)
-    - cross == 0 : colineales
-    """
-    raise NotImplementedError("Completa la función orientacion(a, b, c)")
-
-
-def distancia2(a: Point, b: Point) -> float:
-    """Distancia al cuadrado (evita usar sqrt, no hace falta para comparar)."""
+def distancia2(a, b):
     dx = a[0] - b[0]
     dy = a[1] - b[1]
     return dx * dx + dy * dy
 
 
-def convex_hull(puntos: List[Point]) -> List[Point]:
-    """
-    TODO:
-
-    Idea general:
-    1) Empieza en el punto más a la izquierda.
-    2) En cada paso, elige el siguiente punto q tal que para cualquier otro punto r,
-       el giro desde p hacia q sea el “más externo”.
-    3) Repite hasta regresar al punto inicial.
-
-    Nota:
-    - Maneja colineales: si varios puntos quedan en la misma línea,
-      quédate con el más lejano para que la envolvente quede “por fuera”.
-    """
-    if len(puntos) < 3:
-        return puntos[:]  # no hay polígono
-
-    hull: List[Point] = []
+def convex_hull(puntos):
+    n = len(puntos)
+    if n < 3: return puntos
+    
+    hull = []
     start_idx = punto_mas_izquierdo(puntos)
     p_idx = start_idx
-
+    
     while True:
         hull.append(puntos[p_idx])
-        q_idx = (p_idx + 1) % len(puntos)
-
-        for r_idx in range(len(puntos)):
-            if r_idx == p_idx:
-                continue
-
-            # TODO:
-            # 1) Calcula o = orientacion(p, q, r)
-            # 2) Si r es “más externo” que q, entonces q = r
-            # 3) Si son colineales, elige el más lejano a p
-            #
-            # Sugerencia de convención:
-            # - Si tu orientacion devuelve >0 para CCW,
-            #   normalmente querrás elegir el punto con giro CCW “más externo”.
-            # Ajusta la condición según tu convención.
-            pass
-
+        q_idx = (p_idx + 1) % n
+        
+        for r_idx in range(n):
+            if r_idx == p_idx: continue
+            o = orientacion(puntos[p_idx], puntos[q_idx], puntos[r_idx])
+            # Si r está más a la izquierda que q, r es mejor candidato
+            if o > 0 or (o == 0 and distancia2(puntos[p_idx], puntos[r_idx]) > distancia2(puntos[p_idx], puntos[q_idx])):
+                q_idx = r_idx
+        
         p_idx = q_idx
-        if p_idx == start_idx:
-            break
-
+        if p_idx == start_idx: break
     return hull
 
-
-def dibujar(puntos: List[Point], hull: List[Point], titulo: str = "Convex Hull"):
-    """Dibuja puntos y el polígono del hull."""
-    xs = [p[0] for p in puntos]
-    ys = [p[1] for p in puntos]
-
-    plt.figure()
-    plt.scatter(xs, ys)
-
-    if len(hull) >= 2:
-        hx = [p[0] for p in hull] + [hull[0][0]]
-        hy = [p[1] for p in hull] + [hull[0][1]]
-        plt.plot(hx, hy)
-
-    plt.title(titulo)
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.tight_layout()
+# Graficar los puntos y la envolvente
+def dibujar(puntos, hull):
+    plt.figure("Resultado de Convex Hull")
+    # Separar x e y para graficar
+    px, py = zip(*puntos)
+    plt.scatter(px, py, color='black', label='Puntos')
+    
+    if hull:
+        # Volver al punto inicial para cerrar el polígono
+        hx, hy = zip(*(hull + [hull[0]]))
+        plt.plot(hx, hy, color='yellow', linewidth=2, label='Envolvente')
+    
+    plt.title(f"Puntos procesados: {len(puntos)}")
+    plt.legend()
+    plt.grid(True)
     plt.show()
 
+# Función para el botón de la GUI
+def accion_boton():
+    ruta = filedialog.askopenfilename(filetypes=[("Archivos CSV", "*.csv")])
+    if ruta:
+        puntos = leer_puntos_csv(ruta)
+        if puntos:
+            hull = convex_hull(puntos)
+            dibujar(puntos, hull)
+        else:
+            messagebox.showwarning("Vacío", "No se encontraron coordenadas válidas.")
 
-def main():
-    # TODO: cambia la ruta al CSV que te indicó el profesor
-    ruta = "coordenadas_768_puntos_0_1000.csv"
+# Configuración de la GUI
+ventana = tk.Tk()
+ventana.title("Analizador de Coordenadas")
+ventana.geometry("300x120")
 
-    puntos = leer_puntos_csv(ruta)
-    hull = convex_hull_jarvis(puntos)
+# Elementos de la GUI
+instruccion = tk.Label(ventana, text="Carga un archivo CSV (0-1000 x,y)", pady=10)
+instruccion.pack()
 
-    print(f"Puntos: {len(puntos)}")
-    print(f"Vértices del hull: {len(hull)}")
+boton = tk.Button(ventana, text="Seleccionar Archivo y Graficar", command=accion_boton)
+boton.pack(pady=10)
 
-    dibujar(puntos, hull, titulo="Convex Hull (Jarvis March)")
-
-
-if __name__ == "__main__":
-    main()
+# jecutar el programa
+ventana.mainloop()
+#Preguntas Cierre
+#¿Cómo funciona a alto nivel? Funciona mediante la técnica de "envoltorio de regalo" (Jarvis March). 
+# Se parte del punto más a la izquierda y se busca sucesivamente el siguiente punto que genere el giro más hacia afuera (antihorario).
+# El proceso se repite hasta cerrar el polígono al volver al inicio.
+# ¿Cuál es la complejidad temporal esperada?Es el total de puntos y los puntos en la envolvente. 
+# Eficiencia: Depende de la salida .Peor caso: si todos los puntos forman parte del borde.
+# ¿Qué dificultades encontraron y cómo las resolvieron?Orientación: Se usó el producto cruz para determinar con precisión los giros.
+# Colinealidad: En puntos alineados, se optó por el más lejano para mantener la convexidad.
+# Cierre: Se refinó la condición de parada para evitar bucles infinitos al retronar al origen.
